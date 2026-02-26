@@ -1,0 +1,1452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vinagang - Memory Engine</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- Tailwind Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Outfit', 'sans-serif'],
+                        mono: ['Space Grotesk', 'monospace'],
+                    },
+                    colors: {
+                        duo: {
+                            bg: '#1e2532',           /* Main body background */
+                            panel: '#2b3648',        /* Panels, cards, header */
+                            tabInactive: '#232b38',  /* Inactive tab background */
+                            green: '#A1F03C',        /* Duolingo neon green */
+                            greenDark: '#8bd62d',
+                            red: '#FF4B4B',
+                            purple: '#A855F7',
+                            textMuted: '#9ca3af',
+                            btnGrey: '#58657a'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #1e2532; color: #F8FAFC; overflow-x: hidden; }
+        
+        /* Toast Notification Animations */
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+        .toast-enter { animation: slideIn 0.3s forwards; }
+        .toast-exit { animation: fadeOut 0.5s forwards; }
+
+        .vocab-card { transition: all 0.2s ease-in-out; }
+        .vocab-card:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,0.2); }
+        
+        /* Custom Scrollbar to match theme */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e2532; }
+        ::-webkit-scrollbar-thumb { background: #4B5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6B7280; }
+    </style>
+</head>
+<body class="h-screen font-sans flex flex-col overflow-hidden">
+
+    <!-- Header Section -->
+    <header class="bg-duo-panel pt-6 flex-shrink-0">
+        <div class="max-w-7xl mx-auto px-6 flex items-center justify-between mb-8">
+            <!-- Left Vinagang Logo -->
+            <div class="w-14 h-14 rounded-2xl bg-duo-green relative flex items-center justify-center shadow-[0_0_15px_rgba(161,240,60,0.3)] rotate-3 hover:rotate-0 transition-transform cursor-pointer">
+                <span class="text-[#1e2532] font-black text-3xl font-mono">V</span>
+            </div>
+            
+            <div class="text-center">
+                <h1 class="text-3xl md:text-4xl font-extrabold text-duo-green tracking-tight uppercase tracking-widest">
+                    Vinagang
+                </h1>
+                <p class="text-duo-textMuted text-sm mt-2 font-medium">Interactive Spaced Repetition Dashboard | Duolingo Data Analysis</p>
+            </div>
+
+            <!-- Right Vinagang Logo -->
+            <div class="w-14 h-14 rounded-2xl bg-duo-green relative flex items-center justify-center shadow-[0_0_15px_rgba(161,240,60,0.3)] -rotate-3 hover:rotate-0 transition-transform cursor-pointer">
+                <span class="text-[#1e2532] font-black text-3xl font-mono">V</span>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="flex rounded-t-xl overflow-hidden bg-duo-tabInactive">
+                <button id="tab_problem" onclick="switchTab('problem')" class="flex-1 text-center py-4 text-duo-textMuted font-bold border-t-4 border-transparent hover:text-white transition-all border-r border-slate-700/50">
+                    Problem Statement
+                </button>
+                <button id="tab_eda" onclick="switchTab('eda')" class="flex-1 text-center py-4 text-duo-textMuted font-bold border-t-4 border-transparent hover:text-white transition-all border-r border-slate-700/50">
+                    EDA Analysis
+                </button>
+                <button id="tab_predictor" onclick="switchTab('predictor')" class="flex-1 text-center py-4 text-duo-green font-bold bg-duo-bg border-t-4 border-duo-green border-r border-slate-700/50 transition-all">
+                    Memory Predictor
+                </button>
+                <button id="tab_simulator" onclick="switchTab('simulator')" class="flex-1 text-center py-4 text-duo-textMuted font-bold border-t-4 border-transparent hover:text-white transition-all">
+                    Study Simulator
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Dashboard Area -->
+    <main class="max-w-7xl mx-auto w-full px-6 pt-6 pb-8 flex-grow flex flex-col min-h-0">
+        
+        <!-- ================= PROBLEM STATEMENT VIEW ================= -->
+        <div id="view_problem" class="hidden flex-grow flex flex-col min-h-0 gap-6 overflow-y-auto pr-2 custom-scrollbar">
+            <div class="flex justify-between items-end flex-shrink-0">
+                <h2 class="text-2xl font-bold text-white leading-tight">The Problem: Retention vs. Forgetting</h2>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 flex-shrink-0">
+                <!-- The Business Problem -->
+                <div class="bg-duo-panel border border-slate-700/50 rounded-2xl shadow-xl p-6 flex flex-col relative overflow-hidden">
+                    <div class="absolute -right-4 -top-4 w-32 h-32 bg-duo-red opacity-10 blur-2xl rounded-full"></div>
+                    <div class="text-3xl text-duo-red mb-4"><i class="fa-solid fa-bell"></i></div>
+                    <h3 class="text-xl font-bold text-white mb-3">The Retention Challenge</h3>
+                    <p class="text-slate-300 text-sm leading-relaxed mb-4">
+                        Language learning apps rely on push notifications to bring users back. However, generic scheduling creates a massive dilemma:
+                    </p>
+                    <ul class="space-y-3 text-sm text-slate-300">
+                        <li class="flex items-start gap-2">
+                            <i class="fa-solid fa-xmark text-duo-red mt-1"></i>
+                            <span><strong>Too early:</strong> Feels like spam. Users ignore it because the material is still fresh.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <i class="fa-solid fa-xmark text-duo-red mt-1"></i>
+                            <span><strong>Too late:</strong> Forces the user to relearn from scratch, causing frustration and churn.</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- The Metric -->
+                <div class="bg-duo-panel border border-slate-700/50 rounded-2xl shadow-xl p-6 flex flex-col relative overflow-hidden">
+                    <div class="absolute -right-4 -top-4 w-32 h-32 bg-duo-purple opacity-10 blur-2xl rounded-full"></div>
+                    <div class="text-3xl text-duo-purple mb-4"><i class="fa-solid fa-bullseye"></i></div>
+                    <h3 class="text-xl font-bold text-white mb-3">"Strict Recall" Metric</h3>
+                    <p class="text-slate-300 text-sm leading-relaxed mb-4">
+                        To optimize this timing, we adopted a zero-tolerance definition for forgetting:
+                    </p>
+                    <div class="bg-duo-bg border border-slate-700/50 rounded-lg px-3 py-3 w-full font-mono text-center text-sm text-duo-red font-bold mb-4 shadow-inner">
+                        session_correct &lt; session_seen
+                    </div>
+                    <p class="text-slate-300 text-sm leading-relaxed">
+                        If a user makes even a <strong>single mistake</strong> during their review session, it is immediately flagged as a memory failure event.
+                    </p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-6 flex-shrink-0">
+                <!-- The Objective (Full Width) -->
+                <div class="bg-duo-panel border-t-4 border-t-duo-green border-x border-b border-slate-700/50 rounded-2xl shadow-xl p-6 relative overflow-hidden flex flex-col items-center text-center">
+                    <h3 class="text-2xl font-bold text-duo-green mb-3">The Objective</h3>
+                    <p class="text-slate-300 text-base leading-relaxed mb-3 max-w-4xl">
+                        Build a predictive survival engine to map memory decay for every unique user and word combination. 
+                    </p>
+                    <p class="text-slate-300 text-sm leading-relaxed max-w-4xl">
+                        Instead of relying on hard-coded intervals, the engine calculates a personalized survival curve <strong>S(t)</strong>. It finds the exact day a user's retention probability drops to our 80% threshold, allowing us to schedule dynamic, highly-effective push notifications.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= EDA ANALYSIS VIEW ================= -->
+        <div id="view_eda" class="hidden flex-grow flex flex-col min-h-0 gap-6 overflow-y-auto pr-2 custom-scrollbar">
+            <div class="flex justify-between items-end flex-shrink-0">
+                <h2 class="text-2xl font-bold text-white leading-tight">Exploratory Data Analysis</h2>
+            </div>
+            
+            <div class="bg-duo-panel border border-slate-700/50 rounded-2xl shadow-xl flex flex-col p-6 flex-shrink-0">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-bold text-white">Baseline Kaplan-Meier Survival Curve</h3>
+                    <div class="bg-duo-bg px-3 py-1 rounded-full border border-slate-700/50 text-xs font-bold text-duo-textMuted">
+                        Global Forgetting Curve
+                    </div>
+                </div>
+                
+                <!-- Interactive Chart Container (Replaces static image) -->
+                <div class="w-full bg-duo-bg rounded-xl mb-6 p-4 border border-slate-700/50 relative">
+                    <!-- Custom Legend / Annotations -->
+                    <div class="absolute top-6 right-6 text-right hidden md:block z-10">
+                        <div class="text-duo-red text-sm font-bold bg-duo-red/10 px-3 py-1.5 rounded-xl border border-duo-red/20 flex items-center gap-2 shadow-lg backdrop-blur-sm">
+                            <i class="fa-solid fa-arrow-trend-down"></i> Memory drops below 80% rapidly in < 10 days
+                        </div>
+                    </div>
+                    <div class="absolute bottom-16 left-16 text-xs text-duo-textMuted bg-duo-panel/80 p-3 rounded-xl border border-slate-700/50 hidden md:block shadow-lg backdrop-blur-sm z-10">
+                        <div class="flex items-center gap-2 mb-1.5"><span class="w-4 h-1 rounded-full bg-[#3B82F6]"></span> Global Forgetting Curve</div>
+                        <div class="flex items-center gap-2"><span class="w-4 h-0 border-t-2 border-dashed border-duo-purple"></span> 80% Threshold</div>
+                    </div>
+                    
+                    <div class="w-full h-[400px]">
+                        <canvas id="edaChart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Analysis/Commentary -->
+                <div class="bg-duo-bg border border-slate-700/50 rounded-xl p-5">
+                    <h4 class="text-duo-green font-bold mb-3 flex items-center gap-2 text-lg">
+                        <i class="fa-solid fa-lightbulb"></i> Insight & Analysis
+                    </h4>
+                    <p class="text-slate-300 text-sm leading-relaxed">
+                        This baseline survival curve illustrates aggregate memory decay across all learners. It reveals a sharp initial drop where average retention falls below the critical <strong>80% threshold within just 10 days</strong>, eventually reaching a 50% half-life around day 110.
+                    </p>
+                </div>
+            </div>
+
+            <!-- SECOND EDA CHART: Volume of Practice -->
+            <div class="bg-duo-panel border border-slate-700/50 rounded-2xl shadow-xl flex flex-col p-6 flex-shrink-0">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-bold text-white">Volume of Practice vs. Accuracy</h3>
+                    <div class="bg-duo-bg px-3 py-1 rounded-full border border-slate-700/50 text-xs font-bold text-duo-textMuted">
+                        Historical Efficacy
+                    </div>
+                </div>
+                
+                <!-- Interactive Chart Container -->
+                <div class="w-full bg-duo-bg rounded-xl mb-6 p-4 border border-slate-700/50 relative">
+                    <!-- Custom Legend / Annotations -->
+                    <div class="absolute top-6 left-20 text-xs text-duo-textMuted bg-duo-panel/80 p-3 rounded-xl border border-slate-700/50 hidden md:block shadow-lg backdrop-blur-sm z-10">
+                        <div class="font-bold text-white mb-2">Past Accuracy Tier</div>
+                        <div class="flex items-center gap-2 mb-1.5"><span class="w-3 h-3 rounded-full bg-duo-red opacity-80 border border-duo-red"></span> Low (&lt; 50%)</div>
+                        <div class="flex items-center gap-2 mb-1.5"><span class="w-3 h-3 rounded-full bg-[#F59E0B] opacity-80 border border-[#F59E0B]"></span> Med (50–80%)</div>
+                        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-duo-green opacity-80 border border-duo-green"></span> High (&gt; 80%)</div>
+                    </div>
+                    
+                    <div class="w-full h-[400px]">
+                        <canvas id="volumeChart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Analysis/Commentary -->
+                <div class="bg-duo-bg border border-slate-700/50 rounded-xl p-5">
+                    <h4 class="text-duo-green font-bold mb-3 flex items-center gap-2 text-lg">
+                        <i class="fa-solid fa-lightbulb"></i> Insight & Analysis
+                    </h4>
+                    <p class="text-slate-300 text-sm leading-relaxed">
+                        This chart uncovers the profound difference between "exposure" and "learning." High-accuracy learners (green) exhibit a flat, stable forgetting curve regardless of how many times they see a word—proving that true mastery requires fewer repetitions. Conversely, low-accuracy learners (red) experience a paradoxical <strong>massive spike in their forget rate</strong> as their exposure increases.
+                    </p>
+                </div>
+            </div>
+
+            <!-- THIRD EDA CHART: Language Combinations Heatmap -->
+            <div class="bg-duo-panel border border-slate-700/50 rounded-2xl shadow-xl flex flex-col p-6 flex-shrink-0">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-bold text-white">Which Language Combinations Are Hardest?</h3>
+                    <div class="bg-duo-bg px-3 py-1 rounded-full border border-slate-700/50 text-xs font-bold text-duo-textMuted">
+                        Cross-Lingual Friction
+                    </div>
+                </div>
+                
+                <!-- Interactive Heatmap Container (Pure CSS Grid) -->
+                <div class="w-full bg-duo-bg rounded-xl mb-6 p-6 border border-slate-700/50 flex flex-col md:flex-row gap-6 items-center justify-between">
+                    
+                    <!-- Matrix Grid Wrapper -->
+                    <div class="flex-grow flex flex-col w-full">
+                        <div class="flex flex-grow w-full">
+                            <!-- Y-Axis Title -->
+                            <div class="flex items-center justify-center pr-4">
+                                <span class="text-duo-textMuted text-[13px] font-bold tracking-wider -rotate-180 whitespace-nowrap" style="writing-mode: vertical-rl;">
+                                    Learner's Native Language &rarr;
+                                </span>
+                            </div>
+
+                            <!-- Matrix Grid -->
+                            <div class="flex-grow grid grid-cols-7 gap-1.5 w-full h-[320px]">
+                                
+                                <!-- Header -->
+                                <div class="flex items-end justify-center pb-2"></div>
+                                <div class="flex items-end justify-center pb-2 text-duo-textMuted text-lg font-bold">de</div>
+                                <div class="flex items-end justify-center pb-2 text-duo-textMuted text-lg font-bold">en</div>
+                                <div class="flex items-end justify-center pb-2 text-duo-textMuted text-lg font-bold">es</div>
+                                <div class="flex items-end justify-center pb-2 text-duo-textMuted text-lg font-bold">fr</div>
+                                <div class="flex items-end justify-center pb-2 text-duo-textMuted text-lg font-bold">it</div>
+                                <div class="flex items-end justify-center pb-2 text-duo-textMuted text-lg font-bold">pt</div>
+
+                                <!-- EN Row -->
+                                <div class="flex items-center justify-end pr-4 text-duo-textMuted text-lg font-bold">en</div>
+                                <div class="rounded flex items-center justify-center text-[#1e2532] font-bold text-lg shadow-sm cursor-crosshair hover:scale-105 transition-transform" style="background-color: #facc15" title="en → de: 14.4%">14.4</div>
+                                <div class="bg-slate-800/30 rounded border border-slate-700/20"></div>
+                                <div class="rounded flex items-center justify-center text-[#1e2532] font-bold text-lg shadow-sm cursor-crosshair hover:scale-105 transition-transform" style="background-color: #fde047" title="en → es: 14.3%">14.3</div>
+                                <div class="rounded flex items-center justify-center text-white font-bold text-lg shadow-sm cursor-crosshair hover:scale-105 transition-transform" style="background-color: #ef4444" title="en → fr: 16.6%">16.6</div>
+                                <div class="rounded flex items-center justify-center text-white font-bold text-lg shadow-sm cursor-crosshair hover:scale-105 transition-transform" style="background-color: #22c55e" title="en → it: 12.7%">12.7</div>
+                                <div class="rounded flex items-center justify-center text-[#1e2532] font-bold text-lg shadow-sm cursor-crosshair hover:scale-105 transition-transform" style="background-color: #4ade80" title="en → pt: 12.8%">12.8</div>
+
+                                <!-- ES Row -->
+                                <div class="flex items-center justify-end pr-4 text-duo-textMuted text-lg font-bold">es</div>
+                                <div class="bg-slate-800/30 rounded border border-slate-700/20"></div>
+                                <div class="rounded flex items-center justify-center text-[#1e2532] font-bold text-lg shadow-sm cursor-crosshair hover:scale-105 transition-transform" style="background-color: #fbbf24" title="es → en: 14.8%">14.8</div>
+                                <div class="bg-slate-800/30 rounded border border-slate-700/20"></div>
+                                <div class="bg-slate-800/30 rounded border border-slate-700/20"></div>
+                                <div class="bg-slate-800/30 rounded border border-slate-700/20"></div>
+                                <div class="bg-slate-800/30 rounded border border-slate-700/20"></div>
+
+                                <!-- IT Row -->
+                                <div class="flex items-center justify-end pr-4 text-duo-textMuted text-lg font-bold">it</div>
+                                <div class="bg-slate-800/30 rounded border border-slate-700/20"></div>
+                                <div class="rounded flex items-center justify-center text-[#1e2532] font-bold text-lg shadow-sm cursor-crosshair hover:scale-105 transition-transform" style="background-color: #a3e635" title="it → en: 13.1%">13.1</div>
+                                <div class="bg-slate-800/30 rounded border border-slate-700/20"></div>
+                                <div class="bg-slate-800/30 rounded border border-slate-700/20"></div>
+                                <div class="bg-slate-800/30 rounded border border-slate-700/20"></div>
+                                <div class="bg-slate-800/30 rounded border border-slate-700/20"></div>
+
+                                <!-- PT Row -->
+                                <div class="flex items-center justify-end pr-4 text-duo-textMuted text-lg font-bold">pt</div>
+                                <div class="bg-slate-800/30 rounded border border-slate-700/20"></div>
+                                <div class="rounded flex items-center justify-center text-[#1e2532] font-bold text-lg shadow-sm cursor-crosshair hover:scale-105 transition-transform" style="background-color: #facc15" title="pt → en: 14.4%">14.4</div>
+                                <div class="bg-slate-800/30 rounded border border-slate-700/20"></div>
+                                <div class="bg-slate-800/30 rounded border border-slate-700/20"></div>
+                                <div class="bg-slate-800/30 rounded border border-slate-700/20"></div>
+                                <div class="bg-slate-800/30 rounded border border-slate-700/20"></div>
+                            </div>
+                        </div>
+
+                        <!-- X-Axis Title -->
+                        <div class="flex justify-center mt-3 pl-16">
+                            <span class="text-duo-textMuted text-[13px] font-bold tracking-wider">
+                                Language Being Learned &rarr;
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Legend Sidebar -->
+                    <div class="h-[300px] flex flex-col items-center justify-between w-20 pt-8 border-l border-slate-700/50 pl-6 flex-shrink-0">
+                        <div class="text-sm text-duo-red font-bold">17%</div>
+                        <div class="w-4 flex-grow my-2 rounded-full bg-gradient-to-b from-[#ef4444] via-[#facc15] to-[#22c55e] shadow-inner opacity-90"></div>
+                        <div class="text-sm text-duo-green font-bold">12%</div>
+                        <div class="text-[10px] text-duo-textMuted font-bold uppercase mt-2 text-center leading-tight">Forget<br>Rate</div>
+                    </div>
+                </div>
+                
+                <!-- Analysis/Commentary -->
+                <div class="bg-duo-bg border border-slate-700/50 rounded-xl p-5">
+                    <h4 class="text-duo-green font-bold mb-3 flex items-center gap-2 text-lg">
+                        <i class="fa-solid fa-lightbulb"></i> Insight & Analysis
+                    </h4>
+                    <p class="text-slate-300 text-sm leading-relaxed">
+                        This heatmap reveals the empirical "forget rate" across different language pairings. While most combinations cluster safely around 13–14%, native English speakers learning French face the highest friction at <strong>16.6%</strong>, compared to just <strong>12.7%</strong> for Italian. Our predictive model captures these linguistic idiosyncrasies to dynamically adjust review intervals for harder languages.
+                    </p>
+                </div>
+            </div>
+            
+            <!-- FOURTH EDA CHART: Grammar Complexity -->
+            <div class="bg-duo-panel border border-slate-700/50 rounded-2xl shadow-xl flex flex-col p-6 flex-shrink-0">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-bold text-white">Words With More Grammar Rules Get Forgotten Faster</h3>
+                    <div class="bg-duo-bg px-3 py-1 rounded-full border border-slate-700/50 text-xs font-bold text-duo-textMuted">
+                        Morphological Complexity
+                    </div>
+                </div>
+                
+                <!-- Interactive Chart Container -->
+                <div class="w-full bg-duo-bg rounded-xl mb-6 p-4 border border-slate-700/50 relative">
+                    <div class="w-full h-[350px]">
+                        <canvas id="grammarChart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Analysis/Commentary -->
+                <div class="bg-duo-bg border border-slate-700/50 rounded-xl p-5">
+                    <h4 class="text-duo-green font-bold mb-3 flex items-center gap-2 text-lg">
+                        <i class="fa-solid fa-lightbulb"></i> Insight & Analysis
+                    </h4>
+                    <p class="text-slate-300 text-sm leading-relaxed">
+                        This chart reveals a "U-shaped" relationship between morphological complexity and retention. Words with 1 or 2 grammatical features represent a cognitive sweet spot with the lowest forget rates (13.6%). While zero-grammar words are forgotten slightly faster—likely because these basic words are taught to new users who inherently make more mistakes early on—accumulating heavy conjugations (3 to 5+ rules) causes cognitive overload, spiking the forget rate to <strong>18.9%</strong>. This directly aligns with the positive hazard modifiers we see for complex words in our predictive model.
+                    </p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ================= MEMORY PREDICTOR VIEW ================= -->
+        <div id="view_predictor" class="hidden flex-grow flex flex-col min-h-0 gap-6 overflow-y-auto pr-2 custom-scrollbar">
+            <div class="flex justify-between items-end flex-shrink-0">
+                <h2 class="text-2xl font-bold text-white leading-tight">Training Process & Model Evaluation</h2>
+                <div class="bg-duo-panel border border-slate-700/50 rounded-xl px-4 py-2 flex items-center shadow-md">
+                    <div class="text-right">
+                        <div class="text-[10px] text-duo-textMuted font-bold uppercase tracking-widest leading-none mb-1">Model</div>
+                        <div class="text-xl font-bold text-duo-purple font-mono leading-none">CoxPHFitter</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Training Process Flowchart -->
+            <div class="bg-duo-panel border border-slate-700/50 rounded-2xl shadow-xl flex flex-col p-6 flex-shrink-0">
+                <h3 class="text-lg font-bold text-white mb-6">Model Improvement Workflow</h3>
+                
+                <div class="flex flex-col md:flex-row items-center justify-between gap-4 w-full">
+                    <!-- Step 1 -->
+                    <div class="bg-[#2a5948] border border-[#3e7a67] text-white p-5 rounded-xl text-center w-full md:w-1/4 font-bold shadow-lg">
+                        Train<br>base model
+                    </div>
+                    
+                    <!-- Arrow 1 -->
+                    <div class="hidden md:flex text-slate-500 text-2xl">
+                        <i class="fa-solid fa-arrow-right-long"></i>
+                    </div>
+                    <div class="md:hidden text-slate-500 text-2xl rotate-90 my-1">
+                        <i class="fa-solid fa-arrow-right-long"></i>
+                    </div>
+
+                    <!-- Step 2 (Parallel) -->
+                    <div class="flex flex-col gap-4 w-full md:w-2/5">
+                         <div class="bg-[#0e3b60] border border-[#1e5a8c] text-white p-4 rounded-xl text-center font-bold shadow-lg">
+                            Feature Selection<br><span class="text-xs font-normal text-blue-200 mt-1 block">(add | remove feature)</span>
+                         </div>
+                         <div class="bg-[#0e3b60] border border-[#1e5a8c] text-white p-4 rounded-xl text-center font-bold shadow-lg">
+                            Param Tuning<br><span class="text-xs font-normal text-blue-200 mt-1 block">to find the best optimal param set</span>
+                         </div>
+                    </div>
+
+                    <!-- Arrow 2 -->
+                    <div class="hidden md:flex text-slate-500 text-2xl">
+                        <i class="fa-solid fa-arrow-right-long"></i>
+                    </div>
+                    <div class="md:hidden text-slate-500 text-2xl rotate-90 my-1">
+                        <i class="fa-solid fa-arrow-right-long"></i>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div class="bg-[#b65e0b] border border-[#d97706] text-white p-5 rounded-xl text-center w-full md:w-1/4 font-bold shadow-lg">
+                        Final<br>model
+                    </div>
+                </div>
+            </div>
+
+            <!-- Metrics Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-shrink-0">
+                <!-- Baseline Box -->
+                <div class="bg-duo-panel border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col items-center justify-center">
+                    <span class="text-sm text-duo-textMuted font-bold uppercase tracking-widest mb-6 text-center">Full Model (36 Features)</span>
+                    
+                    <div class="grid grid-cols-2 gap-2 w-full relative z-10">
+                        <!-- Train & Gap (Left) -->
+                        <div class="flex flex-col items-center pt-2">
+                            <span class="text-5xl font-extrabold text-white font-mono tracking-tight mb-2">0.6650</span>
+                            <span class="text-sm text-duo-textMuted font-medium tracking-wide mb-4">Train C-Index</span>
+                            <span class="text-[11px] bg-slate-700/50 text-slate-300 px-3 py-1 rounded-full border border-slate-600 shadow-sm uppercase font-bold tracking-wider">GAP: -0.0014</span>
+                        </div>
+
+                        <!-- Test Highlight (Right) -->
+                        <div class="flex flex-col items-center bg-slate-800/40 pt-2 pb-4 px-2 rounded-xl border border-slate-700/50 relative">
+                            <span class="text-5xl font-extrabold text-white font-mono tracking-tight mb-2">0.6664</span>
+                            <span class="text-sm text-slate-300 font-bold tracking-wide">Test C-Index</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Best Subset Combined Box -->
+                <div class="bg-duo-panel border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col items-center justify-center border-b-4 border-b-duo-green relative overflow-hidden">
+                    <div class="absolute inset-0 bg-duo-green/5 blur-2xl"></div>
+                    
+                    <span class="text-sm text-duo-textMuted font-bold uppercase tracking-widest mb-6 relative z-10 text-center">Best Subset (19 Features)</span>
+                    
+                    <div class="grid grid-cols-2 gap-2 w-full relative z-10">
+                        <!-- Train & Gap (Left) -->
+                        <div class="flex flex-col items-center pt-2">
+                            <span class="text-5xl font-extrabold text-white font-mono tracking-tight mb-2">0.6675</span>
+                            <span class="text-sm text-duo-textMuted font-medium tracking-wide mb-4">Train C-Index</span>
+                            <span class="text-[11px] bg-slate-700/50 text-slate-300 px-3 py-1 rounded-full border border-slate-600 shadow-sm uppercase font-bold tracking-wider">GAP: 0.0002</span>
+                        </div>
+
+                        <!-- Test Highlight (Right) -->
+                        <div class="flex flex-col items-center bg-slate-800/40 pt-2 pb-4 px-2 rounded-xl border border-slate-700/50 relative">
+                            <div class="absolute -top-3 -right-2 bg-duo-green text-[#1e2532] text-[11px] font-black px-2 py-0.5 rounded-full shadow-md animate-pulse">
+                                +0.0013
+                            </div>
+                            <span class="text-5xl font-extrabold text-white font-mono tracking-tight mb-2">0.6677</span>
+                            <span class="text-sm text-duo-green font-bold tracking-wide"><i class="fa-solid fa-arrow-trend-up mr-1"></i>Test C-Index</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart Grid -->
+            <div class="bg-duo-panel border border-slate-700/50 rounded-2xl shadow-xl flex flex-col p-6 flex-shrink-0">
+                <div class="flex justify-between items-center mb-6 flex-shrink-0">
+                    <h3 class="text-xl font-bold text-white">Cox PH Hazard Ratios</h3>
+                    <div class="flex gap-6 text-xs font-bold uppercase tracking-wider">
+                        <span class="text-duo-red flex items-center gap-2"><i class="fa-solid fa-circle text-[10px]"></i> Significant</span>
+                        <span class="text-[#6B7280] flex items-center gap-2"><i class="fa-solid fa-circle text-[10px]"></i> Not Significant</span>
+                    </div>
+                </div>
+                <div class="relative w-full">
+                    <div class="h-[800px] w-full">
+                        <canvas id="predictorChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= STUDY SIMULATOR VIEW ================= -->
+        <div id="view_simulator" class="hidden flex-grow flex flex-col min-h-0 w-full h-full">
+            <!-- TOP PANEL -->
+            <div class="flex justify-between items-end mb-4 flex-shrink-0">
+                <div>
+                    <h2 class="text-2xl font-bold text-white leading-tight">Study Simulator</h2>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    <!-- Timeline Info -->
+                    <div class="bg-duo-panel border border-slate-700/50 rounded-xl px-4 py-2 flex items-center shadow-md">
+                        <div class="text-right">
+                            <div class="text-[10px] text-duo-textMuted font-bold uppercase tracking-widest leading-none mb-1">Timeline</div>
+                            <div class="text-xl font-bold text-white font-mono leading-none">Day <span id="day_counter">0.0</span></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Controls -->
+                    <button id="btn_toggle_time" class="bg-duo-green hover:bg-duo-greenDark text-[#1e293b] px-6 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 active:scale-95 shadow-md">
+                        <i class="fa-solid fa-play" id="icon_play"></i> <span id="text_play">Simulate Time</span>
+                    </button>
+                    <button id="btn_reset" class="bg-duo-panel border border-slate-700/50 hover:bg-slate-700 text-white px-4 py-2.5 rounded-xl font-bold transition-all active:scale-95 shadow-md" title="Reset Simulation">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- BOTTOM GRID: Queue & Chart -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-grow min-h-0">
+                
+                <!-- LEFT PANEL: Study Queue -->
+                <div class="lg:col-span-4 flex flex-col gap-3 h-full overflow-hidden">
+                    <div class="flex items-center gap-3 mb-1 flex-shrink-0">
+                        <h3 class="text-xl font-bold text-white">Study Queue</h3>
+                        <span id="queue_count" class="bg-duo-green text-[#1e293b] font-bold text-sm w-6 h-6 flex items-center justify-center rounded-full">0</span>
+                    </div>
+                    
+                    <!-- Cards container injected via JS -->
+                    <div class="flex flex-col gap-3 overflow-y-auto pr-2 pb-2 h-full" id="vocab_list">
+                        <!-- Cards populate here -->
+                    </div>
+                </div>
+
+                <!-- RIGHT PANEL: Retention Chart -->
+                <div class="lg:col-span-8 bg-duo-panel border border-slate-700/50 rounded-2xl shadow-xl flex flex-col p-6 h-full">
+                    <div class="flex justify-between items-center mb-6 flex-shrink-0">
+                        <h3 class="text-xl font-bold text-white">Retention Matrix S(t)</h3>
+                        
+                        <div class="flex gap-4 text-xs font-bold uppercase tracking-wider">
+                            <span class="text-duo-green flex items-center gap-1.5"><i class="fa-solid fa-circle text-[10px]"></i> Safe</span>
+                            <span class="text-[#F59E0B] flex items-center gap-1.5"><i class="fa-solid fa-circle text-[10px]"></i> Review</span>
+                            <span class="text-duo-red flex items-center gap-1.5"><i class="fa-solid fa-circle text-[10px]"></i> Critical</span>
+                        </div>
+                    </div>
+                    
+                    <div class="relative w-full flex-grow min-h-0">
+                        <canvas id="ceregoChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div> 
+        <!-- End of view_simulator wrapper -->
+    </main>
+
+    <!-- Toast Notifications Container -->
+    <div id="toast_container" class="fixed bottom-6 right-6 flex flex-col gap-3 z-50 pointer-events-none"></div>
+
+    <!-- Application Logic -->
+    <script>
+        // --- 1. THE COX MODEL MATH ---
+        const MODEL_COEFS = {
+            history_acc: -1.45,
+            session_seen: 0.17,
+            acc_x_word_len: -0.10,
+        };
+        const BASELINE_LAMBDA = 0.063; 
+        const NORMALIZATION_OFFSET = -0.482; 
+
+        // --- 2. THE VOCABULARY DATASET ---
+        let words = [
+            { id: 1, word: "der", translation: "the (German)", lang: -0.10, pos: 0.09, len: 3, acc: 0.60, seen: 3, level: 1, lastStudied: 0, notified: false },
+            { id: 2, word: "ragazzo", translation: "boy (Italian)", lang: 0.13, pos: 0.0, len: 7, acc: 0.75, seen: 2, level: 1, lastStudied: 0, notified: false },
+            { id: 3, word: "manger", translation: "to eat (French)", lang: 0.11, pos: -0.03, len: 6, acc: 0.85, seen: 1, level: 2, lastStudied: 0, notified: false },
+            { id: 4, word: "extraordinario", translation: "extraordinary (Spanish)", lang: -0.07, pos: -0.13, len: 14, acc: 0.90, seen: 1, level: 3, lastStudied: 0, notified: false },
+            { id: 5, word: "hund", translation: "dog (German)", lang: -0.10, pos: 0.0, len: 4, acc: 0.80, seen: 2, level: 2, lastStudied: 0, notified: false },
+            { id: 6, word: "sempre", translation: "always (Italian)", lang: 0.13, pos: -0.03, len: 6, acc: 0.65, seen: 3, level: 1, lastStudied: 0, notified: false }
+        ];
+
+        // --- 3. STATE & GLOBALS ---
+        let currentDay = 0;
+        let isSimulating = false;
+        let simulationInterval;
+        let scatterChart;
+
+        // --- 4. CORE FUNCTIONS ---
+        function getHazardRatio(word) {
+            const logWordLen = Math.log1p(word.len);
+            const interactionTerm = word.acc * logWordLen;
+            let linearPredictor = 
+                (MODEL_COEFS.history_acc * word.acc) +
+                (MODEL_COEFS.session_seen * word.seen) +
+                (MODEL_COEFS.acc_x_word_len * interactionTerm) +
+                word.lang + word.pos;
+            const adjustedPredictor = linearPredictor - NORMALIZATION_OFFSET;
+            return Math.exp(adjustedPredictor);
+        }
+
+        function getRetention(word) {
+            let t = currentDay - word.lastStudied;
+            if (t < 0) t = 0;
+            let hr = getHazardRatio(word);
+            return Math.exp(-BASELINE_LAMBDA * t * hr);
+        }
+
+        // --- 5. UI UPDATES & ACTIONS ---
+        function renderVocabularyList() {
+            const listEl = document.getElementById('vocab_list');
+            if(!listEl) return;
+            
+            listEl.innerHTML = ''; // Clear previous cards completely
+
+            let reviewCount = 0;
+            let criticalCount = 0;
+
+            const sortedWords = [...words].sort((a, b) => getRetention(a) - getRetention(b));
+
+            sortedWords.forEach(w => {
+                const ret = getRetention(w);
+                const isCritical = ret < 0.50;
+                const isWarning = ret >= 0.50 && ret < 0.80;
+                const isSafe = ret >= 0.80;
+                
+                if(!isSafe) reviewCount++;
+                if(isCritical) criticalCount++;
+
+                // Colors matching new 3-tier logic
+                let borderColor, pillBg, pillText, btnClass, btnText, textColor;
+
+                if (isCritical) {
+                    borderColor = 'border-duo-red';
+                    pillBg = 'bg-duo-red';
+                    pillText = 'text-white';
+                    textColor = 'text-duo-red';
+                    btnClass = 'bg-duo-red hover:bg-red-500 text-white shadow-md active:scale-95 animate-pulse'; 
+                    btnText = 'Study Now';
+                } else if (isWarning) {
+                    borderColor = 'border-[#F59E0B]'; // Amber/Yellow
+                    pillBg = 'bg-[#F59E0B]';
+                    pillText = 'text-[#1e2532]';
+                    textColor = 'text-[#F59E0B]';
+                    btnClass = 'bg-[#F59E0B] hover:bg-amber-400 text-[#1e2532] shadow-md active:scale-95'; 
+                    btnText = 'Remind';
+                } else {
+                    borderColor = 'border-duo-green';
+                    pillBg = 'bg-duo-green';
+                    pillText = 'text-[#1e293b]';
+                    textColor = 'text-duo-green';
+                    btnClass = 'bg-[#334155] text-white hover:bg-[#475569] active:scale-95'; 
+                    btnText = 'Practice';
+                }
+
+                const card = document.createElement('div');
+                card.className = `vocab-card p-4 rounded-xl border border-slate-700/50 bg-duo-panel mb-1`;
+                
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h4 class="text-xl font-bold text-white leading-tight mb-0.5">${w.word}</h4>
+                            <div class="text-sm font-normal text-duo-textMuted">${w.translation}</div>
+                        </div>
+                        <div class="${textColor} font-bold text-sm">
+                            ${(ret * 100).toFixed(1)}%
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-end">
+                        <div class="flex gap-3 text-[11px] font-semibold text-duo-textMuted bg-duo-bg px-2.5 py-1.5 rounded-md border border-slate-700/50">
+                            <span>Level ${w.level}</span>
+                            <span>Acc: ${(w.acc*100).toFixed(0)}%</span>
+                        </div>
+                        <button onclick="studyWord(${w.id})" class="px-5 py-1.5 rounded-lg text-sm font-bold transition-all ${btnClass}">
+                            ${btnText}
+                        </button>
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+
+            const queueBadge = document.getElementById('queue_count');
+            if(queueBadge) {
+                queueBadge.innerText = reviewCount;
+                if(criticalCount > 0) {
+                    queueBadge.className = "bg-duo-red text-white font-bold text-sm w-6 h-6 flex items-center justify-center rounded-full animate-pulse shadow-[0_0_10px_rgba(255,75,75,0.5)]";
+                } else if (reviewCount > 0) {
+                    queueBadge.className = "bg-[#F59E0B] text-[#1e2532] font-bold text-sm w-6 h-6 flex items-center justify-center rounded-full shadow-[0_0_10px_rgba(245,158,11,0.3)]";
+                } else {
+                    queueBadge.className = "bg-duo-green text-[#1e293b] font-bold text-sm w-6 h-6 flex items-center justify-center rounded-full";
+                }
+            }
+        }
+
+        window.studyWord = function(id) {
+            const word = words.find(w => w.id === id);
+            if(word) {
+                word.lastStudied = currentDay;
+                word.level += 1;
+                word.acc = Math.min(0.99, word.acc + 0.05); 
+                word.seen = Math.max(1, word.seen - 1); 
+                word.notified = false;
+                updateDashboard();
+            }
+        }
+
+        function showToast(wordText) {
+            const container = document.getElementById('toast_container');
+            if(!container) return;
+            
+            const toast = document.createElement('div');
+            toast.className = 'toast-enter bg-duo-panel text-white px-6 py-4 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.5)] flex items-center gap-4 border-l-[6px] border-duo-red';
+            toast.innerHTML = `
+                <div class="bg-duo-red/20 p-2 rounded-full">
+                    <i class="fa-solid fa-bell text-duo-red text-xl"></i>
+                </div>
+                <div>
+                    <h4 class="font-bold text-lg leading-tight">Critical Review</h4>
+                    <p class="text-sm text-duo-textMuted">"${wordText}" dropped below 50%</p>
+                </div>
+            `;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.replace('toast-enter', 'toast-exit');
+                setTimeout(() => toast.remove(), 500); 
+            }, 4000);
+        }
+
+        // --- 6. CHART.JS CEREGO VISUALIZATION ---
+        function initChart() {
+            const ctxElem = document.getElementById('ceregoChart');
+            if(!ctxElem) return;
+            const ctx = ctxElem.getContext('2d');
+            
+            // Draw two threshold lines: 80% (Warning) and 50% (Critical)
+            const thresholdLinePlugin = {
+                id: 'thresholdLine',
+                beforeDraw: (chart) => {
+                    const ctx = chart.ctx;
+                    const xAxis = chart.scales.x;
+                    const yAxis = chart.scales.y;
+                    
+                    const y80 = yAxis.getPixelForValue(0.8);
+                    const y50 = yAxis.getPixelForValue(0.5);
+
+                    // 80% Threshold Line (Warning)
+                    ctx.beginPath();
+                    ctx.moveTo(xAxis.left, y80);
+                    ctx.lineTo(xAxis.right, y80);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#F59E0B'; // Amber
+                    ctx.setLineDash([6, 6]);
+                    ctx.stroke();
+
+                    // 50% Threshold Line (Critical)
+                    ctx.beginPath();
+                    ctx.moveTo(xAxis.left, y50);
+                    ctx.lineTo(xAxis.right, y50);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#FF4B4B'; // Red
+                    ctx.setLineDash([6, 6]);
+                    ctx.stroke();
+                    
+                    ctx.setLineDash([]);
+                }
+            };
+
+            scatterChart = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        {
+                            label: 'Safe',
+                            data: [],
+                            backgroundColor: '#A1F03C', // duo-green
+                            borderColor: '#A1F03C',
+                            borderWidth: 0,
+                            pointRadius: 8,
+                            pointHoverRadius: 10
+                        },
+                        {
+                            label: 'Warning',
+                            data: [],
+                            backgroundColor: '#F59E0B', // amber
+                            borderColor: '#F59E0B',
+                            borderWidth: 0,
+                            pointRadius: 8,
+                            pointHoverRadius: 10
+                        },
+                        {
+                            label: 'Critical',
+                            data: [],
+                            backgroundColor: '#FF4B4B', // duo-red
+                            borderColor: '#FF4B4B',
+                            borderWidth: 0,
+                            pointRadius: 8,
+                            pointHoverRadius: 10
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 0 },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#1e2532',
+                            titleFont: { family: 'Outfit', size: 14, weight: 'bold' },
+                            bodyFont: { family: 'Outfit', size: 13 },
+                            padding: 12,
+                            borderColor: '#4B5563',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    const rawData = context.raw;
+                                    return ` ${rawData.wordText} | Retention: ${(rawData.y * 100).toFixed(1)}%`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            min: 0, max: 6,
+                            title: { display: true, text: 'Level (Number of Reviews)', color: '#9ca3af', font: {family: 'Outfit', size: 13} },
+                            grid: { color: 'rgba(75, 85, 99, 0.2)' },
+                            ticks: { color: '#9ca3af', stepSize: 1, font: {family: 'Space Grotesk'} }
+                        },
+                        y: {
+                            min: 0.1, max: 1,
+                            title: { display: true, text: 'Retention Probability S(t)', color: '#9ca3af', font: {family: 'Outfit', size: 13} },
+                            grid: { color: 'rgba(75, 85, 99, 0.2)' },
+                            ticks: { 
+                                color: '#9ca3af',
+                                font: {family: 'Space Grotesk'},
+                                callback: function(value) { return value }
+                            }
+                        }
+                    }
+                },
+                plugins: [thresholdLinePlugin]
+            });
+        }
+
+        function updateChartData() {
+            if(!scatterChart) return;
+            
+            const safeData = [];
+            const warningData = [];
+            const criticalData = [];
+
+            words.forEach(w => {
+                const ret = getRetention(w);
+                const dataPoint = { x: w.level, y: ret, wordText: w.word };
+                
+                if (ret >= 0.8) {
+                    safeData.push(dataPoint);
+                } else if (ret >= 0.5) {
+                    warningData.push(dataPoint);
+                } else {
+                    criticalData.push(dataPoint);
+                    // ONLY notify when it drops below 50%
+                    if (!w.notified && isSimulating) {
+                        showToast(w.word);
+                        w.notified = true;
+                    }
+                }
+            });
+
+            scatterChart.data.datasets[0].data = safeData;
+            scatterChart.data.datasets[1].data = warningData;
+            scatterChart.data.datasets[2].data = criticalData;
+            scatterChart.update();
+        }
+
+        // --- 7. MAIN LOOP & CONTROLS ---
+        function updateDashboard() {
+            const dayCounter = document.getElementById('day_counter');
+            if(dayCounter) dayCounter.innerText = currentDay.toFixed(1);
+            updateChartData();
+            renderVocabularyList();
+        }
+
+        function tick() {
+            currentDay += 0.2; // 1/20th of a day per tick for slower simulation
+            updateDashboard();
+        }
+
+        const btnToggleTime = document.getElementById('btn_toggle_time');
+        if(btnToggleTime) {
+            btnToggleTime.addEventListener('click', () => {
+                const btnText = document.getElementById('text_play');
+                const icon = document.getElementById('icon_play');
+                const btn = document.getElementById('btn_toggle_time');
+
+                if (isSimulating) {
+                    // Pause
+                    clearInterval(simulationInterval);
+                    isSimulating = false;
+                    if(btnText) btnText.innerText = 'Simulate Time';
+                    if(icon) icon.className = 'fa-solid fa-play';
+                    if(btn) btn.className = 'bg-duo-green hover:bg-duo-greenDark text-[#1e293b] px-6 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 active:scale-95 shadow-md';
+                } else {
+                    // Play
+                    simulationInterval = setInterval(tick, 300); 
+                    isSimulating = true;
+                    if(btnText) btnText.innerText = 'Pause Engine';
+                    if(icon) icon.className = 'fa-solid fa-pause';
+                    if(btn) btn.className = 'bg-duo-red hover:bg-red-500 text-white px-6 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 active:scale-95 shadow-md';
+                }
+            });
+        }
+
+        const btnReset = document.getElementById('btn_reset');
+        if(btnReset) {
+            btnReset.addEventListener('click', () => {
+                currentDay = 0;
+                if(isSimulating) {
+                    const toggleBtn = document.getElementById('btn_toggle_time');
+                    if(toggleBtn) toggleBtn.click(); 
+                }
+                
+                words.forEach(w => {
+                    w.lastStudied = 0;
+                    w.notified = false;
+                    w.level = w.level > 3 ? 1 : w.level; 
+                });
+                updateDashboard();
+            });
+        }
+
+        // Initialize App
+        window.onload = () => {
+            initChart();
+            initPredictorChart();
+            initEdaChart();
+            initVolumeChart();
+            initGrammarChart();
+            updateDashboard();
+            switchTab('problem'); // Start on the Problem tab by default
+        };
+
+        // --- 8. TAB NAVIGATION & PREDICTOR CHART ---
+        function switchTab(tabId) {
+            const tabs = ['problem', 'eda', 'predictor', 'simulator'];
+            
+            const activeClass = "flex-1 text-center py-4 text-duo-green font-bold bg-duo-bg border-t-4 border-duo-green transition-all";
+            const inactiveClass = "flex-1 text-center py-4 text-duo-textMuted font-bold border-t-4 border-transparent hover:text-white transition-all";
+
+            tabs.forEach(tab => {
+                const tabBtn = document.getElementById(`tab_${tab}`);
+                const viewContainer = document.getElementById(`view_${tab}`);
+                
+                if(!tabBtn || !viewContainer) return;
+
+                // Handle right borders for tabs (excluding simulator as it's the last one)
+                let borderClass = (tab !== 'simulator') ? " border-r border-slate-700/50" : "";
+
+                if (tab === tabId) {
+                    tabBtn.className = activeClass + borderClass;
+                    viewContainer.classList.remove('hidden');
+                } else {
+                    tabBtn.className = inactiveClass + borderClass;
+                    viewContainer.classList.add('hidden');
+                }
+            });
+
+            // Handle chart resizing for active tabs
+            if (tabId === 'eda') {
+                if(window.edaChartInstance) window.edaChartInstance.resize();
+                if(window.volumeChartInstance) window.volumeChartInstance.resize();
+                if(window.grammarChartInstance) window.grammarChartInstance.resize();
+            } else if (tabId === 'predictor') {
+                if(window.predictorChartInstance) window.predictorChartInstance.resize();
+            } else if (tabId === 'simulator') {
+                if(scatterChart) scatterChart.resize();
+            }
+        }
+
+        function initGrammarChart() {
+            const ctxElem = document.getElementById('grammarChart');
+            if(!ctxElem) return;
+            const ctx = ctxElem.getContext('2d');
+
+            const dataValues = [15.0, 13.6, 14.4, 15.2, 15.9, 18.9];
+            // Green for 1 & 2. Orange for the rest. Matching the visual story of the uploaded chart.
+            const bgColors = ['#F59E0B', '#A1F03C', '#A1F03C', '#F59E0B', '#F59E0B', '#F59E0B'];
+
+            const topLabelsPlugin = {
+                id: 'topLabels',
+                afterDatasetsDraw(chart) {
+                    const {ctx, scales: {x, y}} = chart;
+                    chart.data.datasets[0].data.forEach((datapoint, index) => {
+                        const meta = chart.getDatasetMeta(0);
+                        const bar = meta.data[index];
+                        
+                        ctx.fillStyle = '#F8FAFC'; // White text
+                        ctx.font = 'bold 14px "Space Grotesk"';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        
+                        ctx.fillText(datapoint.toFixed(1) + '%', bar.x, bar.y - 8);
+                    });
+                }
+            };
+
+            window.grammarChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['0', '1', '2', '3', '4', '5'],
+                    datasets: [{
+                        label: 'Forget Rate (%)',
+                        data: dataValues,
+                        backgroundColor: bgColors,
+                        borderWidth: 0,
+                        borderRadius: 6,
+                        barThickness: 'flex',
+                        maxBarThickness: 70
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: {
+                        padding: {
+                            top: 25 // Give space for the labels above the bars
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#2b3648',
+                            titleFont: { family: 'Outfit', size: 14, weight: 'bold' },
+                            bodyFont: { family: 'Outfit', size: 13 },
+                            padding: 12,
+                            borderColor: '#4B5563',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    return ` Forget Rate: ${context.parsed.y.toFixed(1)}%`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Number of Grammar Rules Attached to the Word (0 = simple word; 4+ = complex conjugation)', color: '#9ca3af', font: {family: 'Outfit', size: 13} },
+                            grid: { display: false },
+                            ticks: { color: '#9ca3af', font: {family: 'Space Grotesk', size: 14} }
+                        },
+                        y: {
+                            min: 0, max: 20,
+                            title: { display: true, text: 'Forget Rate (%)', color: '#9ca3af', font: {family: 'Outfit', size: 14} },
+                            grid: { color: 'rgba(75, 85, 99, 0.2)' },
+                            ticks: { color: '#9ca3af', font: {family: 'Space Grotesk'} }
+                        }
+                    }
+                },
+                plugins: [topLabelsPlugin]
+            });
+        }
+
+        function initVolumeChart() {
+            const ctxElem = document.getElementById('volumeChart');
+            if(!ctxElem) return;
+            const ctx = ctxElem.getContext('2d');
+
+            const avgLinePlugin = {
+                id: 'avgLine',
+                beforeDraw: (chart) => {
+                    const ctx = chart.ctx;
+                    const xAxis = chart.scales.x;
+                    const yAxis = chart.scales.y;
+                    const yAvg = yAxis.getPixelForValue(16);
+
+                    ctx.beginPath();
+                    ctx.moveTo(xAxis.left, yAvg);
+                    ctx.lineTo(xAxis.right, yAvg);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#9ca3af';
+                    ctx.setLineDash([6, 6]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    
+                    ctx.fillStyle = '#9ca3af';
+                    ctx.font = 'bold 12px "Outfit"';
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'bottom';
+                    ctx.fillText('Overall avg (16.0%)', xAxis.left + 10, yAvg - 6);
+                }
+            };
+
+            window.volumeChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['1–3', '4–6', '7–11', '12–21', '22+'],
+                    datasets: [
+                        {
+                            label: 'Low (< 50%)',
+                            data: [27.5, 32.0, 42.0, 54.5, 67.5],
+                            borderColor: '#FF4B4B',
+                            backgroundColor: 'rgba(255, 75, 75, 0.1)',
+                            pointBackgroundColor: '#FF4B4B',
+                            pointBorderColor: '#1e2532',
+                            borderWidth: 3,
+                            pointRadius: 6,
+                            pointHoverRadius: 8,
+                            pointBorderWidth: 2,
+                            fill: true,
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Med (50–80%)',
+                            data: [21.5, 23.3, 23.2, 24.5, 33.7],
+                            borderColor: '#F59E0B',
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                            pointBackgroundColor: '#F59E0B',
+                            pointBorderColor: '#1e2532',
+                            borderWidth: 3,
+                            pointRadius: 6,
+                            pointHoverRadius: 8,
+                            pointBorderWidth: 2,
+                            fill: true,
+                            tension: 0.1
+                        },
+                        {
+                            label: 'High (> 80%)',
+                            data: [14.5, 14.5, 13.5, 13.7, 14.0],
+                            borderColor: '#A1F03C',
+                            backgroundColor: 'rgba(161, 240, 60, 0.1)',
+                            pointBackgroundColor: '#A1F03C',
+                            pointBorderColor: '#1e2532',
+                            borderWidth: 3,
+                            pointRadius: 6,
+                            pointHoverRadius: 8,
+                            pointBorderWidth: 2,
+                            fill: true,
+                            tension: 0.1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#2b3648',
+                            titleFont: { family: 'Outfit', size: 14, weight: 'bold' },
+                            bodyFont: { family: 'Outfit', size: 13 },
+                            padding: 12,
+                            borderColor: '#4B5563',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    return ` ${context.dataset.label}: ${context.parsed.y.toFixed(1)}% Forget Rate`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Total Times Seen (history_seen)', color: '#9ca3af', font: {family: 'Outfit', size: 14} },
+                            grid: { color: 'rgba(75, 85, 99, 0.2)' },
+                            ticks: { color: '#9ca3af', font: {family: 'Space Grotesk'} }
+                        },
+                        y: {
+                            min: 0, max: 70,
+                            title: { display: true, text: 'Forget Rate (%)', color: '#9ca3af', font: {family: 'Outfit', size: 14} },
+                            grid: { color: 'rgba(75, 85, 99, 0.2)' },
+                            ticks: { color: '#9ca3af', font: {family: 'Space Grotesk'} }
+                        }
+                    }
+                },
+                plugins: [avgLinePlugin]
+            });
+        }
+
+        function initEdaChart() {
+            const ctxElem = document.getElementById('edaChart');
+            if(!ctxElem) return;
+            const ctx = ctxElem.getContext('2d');
+
+            const thresholdPlugin = {
+                id: 'thresholdBackground',
+                beforeDraw: (chart) => {
+                    const ctx = chart.ctx;
+                    const xAxis = chart.scales.x;
+                    const yAxis = chart.scales.y;
+                    
+                    const y80 = yAxis.getPixelForValue(0.8);
+
+                    // 80% Threshold Line
+                    ctx.beginPath();
+                    ctx.moveTo(xAxis.left, y80);
+                    ctx.lineTo(xAxis.right, y80);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#A855F7'; // duo-purple
+                    ctx.setLineDash([6, 6]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            };
+
+            // Empirical Data Points extracted from the Kaplan-Meier plot
+            const dataPoints = [
+                {x: 0, y: 1.0}, {x: 2, y: 0.90}, {x: 10, y: 0.80}, {x: 20, y: 0.72},
+                {x: 40, y: 0.64}, {x: 70, y: 0.56}, {x: 110, y: 0.49}, {x: 150, y: 0.46},
+                {x: 220, y: 0.40}, {x: 260, y: 0.35}, {x: 310, y: 0.24}, {x: 340, y: 0.19},
+                {x: 400, y: 0.16}, {x: 460, y: 0.09}
+            ];
+
+            window.edaChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: 'Global Forgetting Curve',
+                        data: dataPoints,
+                        borderColor: '#3B82F6', // Standard blue to match KM plot
+                        backgroundColor: 'rgba(59, 130, 246, 0.15)', // Shadow beneath line
+                        borderWidth: 3,
+                        pointRadius: 0, // Hidden points to look like a smooth survival step-curve
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: '#3B82F6',
+                        pointBorderColor: '#1e2532',
+                        pointBorderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#2b3648',
+                            titleFont: { family: 'Outfit', size: 14, weight: 'bold' },
+                            bodyFont: { family: 'Outfit', size: 13 },
+                            padding: 12,
+                            borderColor: '#4B5563',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    return ` Survival Probability: ${(context.parsed.y).toFixed(2)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            min: 0, max: 480,
+                            title: { display: true, text: 'Days Since Last Review', color: '#9ca3af', font: {family: 'Outfit', size: 14} },
+                            grid: { color: 'rgba(75, 85, 99, 0.2)' },
+                            ticks: { color: '#9ca3af', font: {family: 'Space Grotesk'} }
+                        },
+                        y: {
+                            min: 0, max: 1,
+                            title: { display: true, text: 'Probability of Remembering (Survival)', color: '#9ca3af', font: {family: 'Outfit', size: 14} },
+                            grid: { color: 'rgba(75, 85, 99, 0.2)' },
+                            ticks: { 
+                                color: '#9ca3af', 
+                                font: {family: 'Space Grotesk'},
+                                callback: function(value) { return value.toFixed(1); }
+                            }
+                        }
+                    }
+                },
+                plugins: [thresholdPlugin]
+            });
+        }
+
+        function initPredictorChart() {
+            const ctxElem = document.getElementById('predictorChart');
+            if(!ctxElem) return;
+            const ctx = ctxElem.getContext('2d');
+
+            const zeroLinePlugin = {
+                id: 'zeroLine',
+                beforeDraw: (chart) => {
+                    const ctx = chart.ctx;
+                    const xAxis = chart.scales.x;
+                    const yAxis = chart.scales.y;
+                    const xZero = xAxis.getPixelForValue(0);
+
+                    ctx.beginPath();
+                    ctx.moveTo(xZero, yAxis.top);
+                    ctx.lineTo(xZero, yAxis.bottom);
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeStyle = '#9ca3af'; // duo-textMuted
+                    ctx.setLineDash([5, 5]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            };
+
+            const errorBarsAndLabelsPlugin = {
+                id: 'errorBarsAndLabels',
+                afterDatasetsDraw: (chart) => {
+                    const ctx = chart.ctx;
+                    const xAxis = chart.scales.x;
+                    const dataset = chart.data.datasets[0];
+                    const meta = chart.getDatasetMeta(0);
+
+                    ctx.save();
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'middle';
+                    ctx.font = '12px "Space Grotesk"';
+
+                    dataset.data.forEach((val, index) => {
+                        const model = meta.data[index];
+                        const y = model.y;
+                        const lower = dataset.customLower[index];
+                        const upper = dataset.customUpper[index];
+                        const hr = dataset.customHr[index];
+                        const isSig = dataset.customSig[index];
+
+                        const xCenter = xAxis.getPixelForValue(val);
+                        const xLower = xAxis.getPixelForValue(lower);
+                        const xUpper = xAxis.getPixelForValue(upper);
+
+                        // Draw Error Bar Line
+                        ctx.beginPath();
+                        ctx.moveTo(xLower, y);
+                        ctx.lineTo(xUpper, y);
+                        ctx.lineWidth = 1.5;
+                        ctx.strokeStyle = '#F8FAFC'; // White for contrast
+                        ctx.stroke();
+
+                        // Draw Error Bar Caps
+                        const capHeight = 4;
+                        ctx.beginPath();
+                        ctx.moveTo(xLower, y - capHeight);
+                        ctx.lineTo(xLower, y + capHeight);
+                        ctx.moveTo(xUpper, y - capHeight);
+                        ctx.lineTo(xUpper, y + capHeight);
+                        ctx.stroke();
+
+                        // Draw HR Text
+                        ctx.fillStyle = '#9ca3af';
+                        const text = `HR=${hr.toFixed(3)}${isSig ? '*' : ''}`;
+                        const textX = Math.max(xCenter, xUpper) + 8; // Offset to the right
+                        
+                        ctx.fillText(text, textX, y);
+                    });
+                    ctx.restore();
+                }
+            };
+
+            // Full extracted data from the provided tables/charts
+            const rawData = [
+                { var: 'log_session_seen', coef: 0.1578, hr: 1.1709, lower: 0.1480, upper: 0.1677, sig: true },
+                { var: 'log_history_wrong', coef: 0.0926, hr: 1.0970, lower: 0.0818, upper: 0.1033, sig: true },
+                { var: 'pos_det', coef: 0.0820, hr: 1.0854, lower: 0.0487, upper: 0.1152, sig: true },
+                { var: 'lang_fr', coef: 0.0713, hr: 1.0739, lower: 0.0424, upper: 0.1002, sig: true },
+                { var: 'total_exposures', coef: 0.0507, hr: 1.0521, lower: 0.0404, upper: 0.0611, sig: true },
+                { var: 'lang_it', coef: 0.0338, hr: 1.0344, lower: -0.0100, upper: 0.0776, sig: false },
+                { var: 'pos_prn', coef: 0.0294, hr: 1.0298, lower: -0.0077, upper: 0.0665, sig: false },
+                { var: 'ui_lang_pt', coef: 0.0152, hr: 1.0154, lower: -0.0241, upper: 0.0546, sig: false },
+                { var: 'is_weekend', coef: 0.0051, hr: 1.0051, lower: -0.0051, upper: 0.0153, sig: false },
+                { var: 'tag_f_z', coef: 0.0008, hr: 1.0008, lower: -0.0095, upper: 0.0111, sig: false },
+                { var: 'tag_past_z', coef: 0.0000, hr: 1.0000, lower: -0.0096, upper: 0.0097, sig: false },
+                { var: 'tag_sg_z', coef: -0.0013, hr: 0.9987, lower: -0.0117, upper: 0.0092, sig: false },
+                { var: 'tag_pl_z', coef: -0.0040, hr: 0.9961, lower: -0.0144, upper: 0.0065, sig: false },
+                { var: 'lang_other', coef: -0.0161, hr: 0.9841, lower: -0.0842, upper: 0.0520, sig: false },
+                { var: 'lex_word_len', coef: -0.0266, hr: 0.9737, lower: -0.0371, upper: -0.0162, sig: true },
+                { var: 'pos_vblex', coef: -0.0273, hr: 0.9731, lower: -0.0545, upper: 0.0000, sig: true },
+                { var: 'user_avg_acc', coef: -0.0504, hr: 0.9508, lower: -0.0606, upper: -0.0403, sig: true },
+                { var: 'history_acc', coef: -0.0602, hr: 0.9416, lower: -0.0706, upper: -0.0497, sig: true },
+                { var: 'ui_lang_it', coef: -0.0735, hr: 0.9292, lower: -0.1295, upper: -0.0174, sig: true }
+            ];
+
+            const labels = rawData.map(d => d.var);
+            const dataValues = rawData.map(d => d.coef);
+            
+            // Determine significance directly from the provided table
+            const isSignificant = rawData.map(d => d.sig);
+            const bgColors = isSignificant.map(sig => sig ? '#FF4B4B' : '#6B7280');
+
+            window.predictorChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'log(Hazard Ratio)',
+                        data: dataValues,
+                        backgroundColor: bgColors,
+                        borderWidth: 0,
+                        barThickness: 16, // Fixed thickness for a cleaner look with 34 items
+                        customLower: rawData.map(d => d.lower),
+                        customUpper: rawData.map(d => d.upper),
+                        customHr: rawData.map(d => d.hr),
+                        customSig: isSignificant
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: {
+                        padding: {
+                            right: 80 // Give space for the text labels on the right
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#1e2532',
+                            titleFont: { family: 'Outfit', size: 14, weight: 'bold' },
+                            bodyFont: { family: 'Outfit', size: 13 },
+                            padding: 12,
+                            borderColor: '#4B5563',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    const idx = context.dataIndex;
+                                    const hr = rawData[idx].hr.toFixed(4);
+                                    const sig = isSignificant[idx] ? '*' : '';
+                                    return ` log(HR): ${context.parsed.x.toFixed(4)} | HR: ${hr}${sig}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            min: -0.16, max: 0.18,
+                            title: { 
+                                display: true, 
+                                text: 'log(Hazard Ratio)    ← protects memory | accelerates forgetting →', 
+                                color: '#9ca3af', 
+                                font: {family: 'Outfit', size: 14, weight: 'bold'} 
+                            },
+                            grid: { color: 'rgba(75, 85, 99, 0.1)' },
+                            ticks: { color: '#9ca3af', font: {family: 'Space Grotesk'} }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: { color: '#F8FAFC', font: {family: 'Space Grotesk', size: 12} }
+                        }
+                    }
+                },
+                plugins: [zeroLinePlugin, errorBarsAndLabelsPlugin]
+            });
+        }
+    </script>
+</body>
+</html>
